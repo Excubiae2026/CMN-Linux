@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import sys
 import json
 import sqlite3
 import subprocess
@@ -12,7 +13,6 @@ from datetime import datetime
 from ecdsa import SECP256k1, SigningKey
 import requests
 from flask import Flask, jsonify
-import socket
 
 # ==============================
 # CONFIG
@@ -22,25 +22,51 @@ PUZZLE_FILE = os.path.join(DATA_DIR, "puzzle77.json")
 DB_PATH = os.path.join(DATA_DIR, "chunk_progress.db")
 ACCOUNTS_FILE = os.path.join(DATA_DIR, "accounts.json")
 PRIVKEY_FILE = os.path.join(DATA_DIR, "privkey.txt")
-LOCAL_VERSION = "1.0.0"
+
+LOCAL_VERSION = "1.0.1"
 VERSION_URL = "https://raw.githubusercontent.com/Excubiae2026/CMN-Linux/main/version.txt"
+GITHUB_REPO = "https://github.com/Excubiae2026/CMN-Linux.git"
+LOCAL_REPO_DIR = os.path.join(DATA_DIR, "CMN-Linux")
 
 os.makedirs(DATA_DIR, exist_ok=True)
+def run_autoupdater():
+    print(f"[{datetime.now()}] 🔄 Running autoupdate.py...")
+
+    try:
+        subprocess.Popen(["python3", "autoupdate.py"])
+        print(f"[{datetime.now()}] 🚀 Autoupdate script started successfully.")
+        os._exit(0)  # stop current daemon so autoupdate can replace it safely
+    except Exception as e:
+        print(f"[{datetime.now()}] ❌ Failed to run autoupdate.py: {e}")
 
 # ==============================
-# Version check
+# Version & self-update
 # ==============================
 def check_version():
     try:
         r = requests.get(VERSION_URL, timeout=5)
         r.raise_for_status()
         latest_version = r.text.strip()
+
         if LOCAL_VERSION != latest_version:
             print(f"[{datetime.now()}] ⚠️ New version available: {latest_version} (local: {LOCAL_VERSION})")
+            run_autoupdater()  # <<–– call autoupdate.py
         else:
             print(f"[{datetime.now()}] ✅ Daemon is up to date (version {LOCAL_VERSION})")
+
     except Exception as e:
         print(f"[{datetime.now()}] ❌ Failed to check version: {e}")
+
+def update_from_github():
+    print(f"[{datetime.now()}] 🌐 Updating daemon from GitHub...")
+    if not os.path.exists(LOCAL_REPO_DIR):
+        subprocess.run(["git", "clone", GITHUB_REPO, LOCAL_REPO_DIR], check=True)
+    else:
+        subprocess.run(["git", "-C", LOCAL_REPO_DIR, "pull"], check=True)
+
+    print(f"[{datetime.now()}] 🔄 Restarting daemon...")
+    python_executable = sys.executable
+    os.execv(python_executable, [python_executable] + sys.argv)
 
 # ==============================
 # JSON helpers
@@ -121,7 +147,7 @@ def update_local_balance(pubkey, amount):
     save_local_json(accounts, ACCOUNTS_FILE)
 
 # ==============================
-# HTTP Server (VPN-friendly)
+# HTTP Server for serving puzzle
 # ==============================
 def start_server():
     app = Flask(__name__)
@@ -131,19 +157,11 @@ def start_server():
         puzzle = load_local_json()
         return jsonify(puzzle)
 
-    def run_flask():
-        app.run(host="0.0.0.0", port=8000, debug=False, use_reloader=False)
-
-    threading.Thread(target=run_flask, daemon=True).start()
-
-    # Print all accessible IPs
-    try:
-        hostname = socket.gethostname()
-        local_ip = socket.gethostbyname(hostname)
-        print(f"[{datetime.now()}] 🌐 Server started at http://{local_ip}:8000/current.json")
-    except:
-        print(f"[{datetime.now()}] 🌐 Server started at 0.0.0.0:8000 (check your VPN/firewall)")
-    print(f"[{datetime.now()}] 🌐 Also accessible via http://localhost:8000/current.json")
+    threading.Thread(
+        target=lambda: app.run(host="0.0.0.0", port=8000, debug=False, use_reloader=False),
+        daemon=True
+    ).start()
+    print(f"[{datetime.now()}] 🌐 Server started at http://localhost:8000/current.json")
 
 # ==============================
 # Mining
@@ -247,13 +265,13 @@ if __name__ == "__main__":
 
     print("🚀 CryptoMesh Daemon Starting")
 
-    # Version check
+    # Version check & self-update
     check_version()
 
     init_db()
     pubkey = generate_keys()
 
-    # Start VPN-friendly HTTP server
+    # Start built-in HTTP server
     start_server()
 
     puzzle = load_local_json()
@@ -272,7 +290,7 @@ if __name__ == "__main__":
 
     gpu_count = detect_gpus() if args.devices else 1
     print(f"🔧 Using {gpu_count} device(s)")
-
+    print(f"{LOCAL_VERSION}")
     available_chunks = [c["chunk_id"] for c in puzzle if not c.get("completed", False)]
     random.shuffle(available_chunks)
 
