@@ -41,12 +41,6 @@ def auto_update():
 
     print("[AUTOUPDATE] New version detected! Updating…")
 
-    # 1. Kill running cryptomesh
-    try:
-        subprocess.run(["killall", "cryptomesh"], check=False)
-        print("[AUTOUPDATE] Killed running cryptomesh process.")
-    except Exception as e:
-        print("[AUTOUPDATE] killall failed:", e)
 
     # 2. Backup old file
     if os.path.exists(LOCAL_FILE):
@@ -55,9 +49,14 @@ def auto_update():
     # 3. Write new version
     with open(LOCAL_FILE, "wb") as f:
         f.write(remote_content)
-
     print("[AUTOUPDATE] main.py updated successfully.")
 
-    # 4. Relaunch
+    # 4. Restart daemon
     print("[AUTOUPDATE] Restarting daemon…")
-    os.execvp("python3", ["python3", LOCAL_FILE])
+    try:
+        os.execvp("python", ["python", LOCAL_FILE])
+    except Exception as e:
+        print("[AUTOUPDATE] Failed to restart:", e)
+
+if __name__ == '__main__':
+    auto_update()
