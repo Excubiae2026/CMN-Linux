@@ -12,6 +12,7 @@ from datetime import datetime
 from ecdsa import SECP256k1, SigningKey
 import requests
 from flask import Flask, jsonify
+import socket
 
 # ==============================
 # CONFIG
@@ -21,8 +22,25 @@ PUZZLE_FILE = os.path.join(DATA_DIR, "puzzle77.json")
 DB_PATH = os.path.join(DATA_DIR, "chunk_progress.db")
 ACCOUNTS_FILE = os.path.join(DATA_DIR, "accounts.json")
 PRIVKEY_FILE = os.path.join(DATA_DIR, "privkey.txt")
+LOCAL_VERSION = "1.0.0"
+VERSION_URL = "https://raw.githubusercontent.com/Excubiae2026/CMN-Linux/main/version.txt"
 
 os.makedirs(DATA_DIR, exist_ok=True)
+
+# ==============================
+# Version check
+# ==============================
+def check_version():
+    try:
+        r = requests.get(VERSION_URL, timeout=5)
+        r.raise_for_status()
+        latest_version = r.text.strip()
+        if LOCAL_VERSION != latest_version:
+            print(f"[{datetime.now()}] ⚠️ New version available: {latest_version} (local: {LOCAL_VERSION})")
+        else:
+            print(f"[{datetime.now()}] ✅ Daemon is up to date (version {LOCAL_VERSION})")
+    except Exception as e:
+        print(f"[{datetime.now()}] ❌ Failed to check version: {e}")
 
 # ==============================
 # JSON helpers
@@ -103,7 +121,7 @@ def update_local_balance(pubkey, amount):
     save_local_json(accounts, ACCOUNTS_FILE)
 
 # ==============================
-# HTTP Server for serving puzzle
+# HTTP Server (VPN-friendly)
 # ==============================
 def start_server():
     app = Flask(__name__)
@@ -113,11 +131,19 @@ def start_server():
         puzzle = load_local_json()
         return jsonify(puzzle)
 
-    threading.Thread(
-        target=lambda: app.run(host="0.0.0.0", port=8000, debug=False, use_reloader=False),
-        daemon=True
-    ).start()
-    print(f"[{datetime.now()}] 🌐 Server started at http://localhost:8000/current.json")
+    def run_flask():
+        app.run(host="0.0.0.0", port=8000, debug=False, use_reloader=False)
+
+    threading.Thread(target=run_flask, daemon=True).start()
+
+    # Print all accessible IPs
+    try:
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+        print(f"[{datetime.now()}] 🌐 Server started at http://{local_ip}:8000/current.json")
+    except:
+        print(f"[{datetime.now()}] 🌐 Server started at 0.0.0.0:8000 (check your VPN/firewall)")
+    print(f"[{datetime.now()}] 🌐 Also accessible via http://localhost:8000/current.json")
 
 # ==============================
 # Mining
@@ -168,7 +194,7 @@ def mine_chunk(chunk_id, device_id=None, pubkey=None):
                 if c["chunk_id"] == chunk_id:
                     c["current_hex"] = current_hex
                     break
-            save_local_json(puzzle_json)  # update local JSON immediately
+            save_local_json(puzzle_json)
 
         now = time.time()
         if now - last_time >= 60 and pubkey:
@@ -220,10 +246,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     print("🚀 CryptoMesh Daemon Starting")
+
+    # Version check
+    check_version()
+
     init_db()
     pubkey = generate_keys()
 
-    # Start built-in HTTP server
+    # Start VPN-friendly HTTP server
     start_server()
 
     puzzle = load_local_json()
