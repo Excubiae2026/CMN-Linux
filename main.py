@@ -34,7 +34,7 @@ def run_autoupdater():
 
     try:
         subprocess.Popen(["python", "autoupdate.py"])
-        print(f"[{datetime.now()}] 🚀 Autoupdate script started successfully.")
+        print(f"[{datetime.now()}] 🚀 Please run python autoupdate.py.")
         os._exit(0)  # stop current daemon so autoupdate can replace it safely
     except Exception as e:
         print(f"[{datetime.now()}] ❌ Failed to run autoupdate.py: {e}")
