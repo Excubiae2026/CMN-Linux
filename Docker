@@ -1,0 +1,25 @@
+# Dockerfile for CMN-Linux main directory
+FROM python:3.11-slim
+
+# Install OS dependencies
+RUN apt-get update && \
+    apt-get install -y git && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy the entire repo (main directory)
+COPY . .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Ensure data directory exists
+RUN mkdir -p /root/.cmn
+
+# Expose port for JSON server
+EXPOSE 8000
+
+# Start the daemon
+CMD ["python", "main.py"]
