@@ -6,7 +6,7 @@ python main.py
 
 
 
-###### AUTO UPDATE ############
+### AUTO UPDATE 
 When new version detected you can run python autoupdate.py to update node then run python main.py like normal
 
 
