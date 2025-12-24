@@ -8,3 +8,10 @@ python main.py
 
 ###### AUTO UPDATE ############
 When new version detected you can run python autoupdate.py to update node then run python main.py like normal
+
+
+### OPEN PORT HiveOS
+sudo apt-get install ufw -y
+sudo ufw enable
+sudo ufw allow 8000/tcp
+sudo ufw status
